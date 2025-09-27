@@ -1,32 +1,93 @@
 import socket
 import threading
-import netifaces
+import struct
+import sys
 
 # Para leer la MAC del dispositivo
-interfaces = netifaces.interfaces()
-print(interfaces)
+def Obtener_Mac(interface):
+    try:
+        with open(f'/sys/class/net/{interface}/address', 'r') as f:
+            mac = f.read().strip()
+            return mac
+    except FileNotFoundError:
+        return None 
 
-addrs = netifaces.ifaddresses("enp0s3")
-mac = addrs[netifaces.AF_LINK][0]['addr']
-print(mac)
-
-# Metodos Base
+# Trabajo con frame
 def MacToBytes(mac):
-    return bytes.fromhex(mac.replace(":", ""))
+    return bytes.fromhex(mac.replace(";", ""))
 
-def ReadFrames(interface):
+def CreateFrame(mac_dst, mac_src, msg_type, message):
+    # Mensaje a bytes:
+    if isinstance(message, str):
+        message_bytes = message.encode('utf-8')
+    else:
+        message_bytes = message
+    # Longitud
+    length = len(message_bytes).to_bytes(2, 'big')
+    # Frame
+    return MacToBytes(mac_dst) + MacToBytes(mac_src) + msg_type.to_bytes(1, 'big') + length + message_bytes 
+
+def DecodeFrame(frame):
+    return
+
+# Metodos Base De Comunicacion
+def CreateSocket(interface):
     raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
     raw_socket.bind((interface, 0))
+    return raw_socket
 
-    while(True):
-        frame, addr = raw_socket.recvfrom(65535) #valor maximo de bytes permitidos
-        print(f"Frame recibido de {addr}: {frame.hex()}")
+def ReciveFrame(raw_socket, buff_size = 65535):
+    frame, addr = raw_socket.recvfrom(buff_size) 
+    print(f"Frame recibido de {addr}: {frame.hex()}")
+    return frame
 
-def SendFrame(interface, frame):
-    s = socket.socket(socket.AF_PACKET, socket.SOCK_RAW)
-    s.bind((interface,0))
-    s.send(frame)
-    s.close()
+def SendFrame(raw_socket, interface, frame):
+    raw_socket.sendto(frame, (interface, 0))
+    print(f"Frame enviado : {frame.hex()}")
+    
+if __name__ == "__main__":
 
-def BuildFrame(DstMAC, SrcMAC, Data):
-    return MacToBytes(DstMAC) + MacToBytes(SrcMAC) + Data.encode()
+    interface = "enp0s3"
+    raw_socket = CreateSocket(interface)
+    
+# Trabajo con los hilos de ejecucion
+def receive_thread(raw_socket, stop_event):
+    try:
+        while not stop_event.is_set():
+            ReciveFrame(raw_socket)
+    except Exception as e:
+        print(f"Error en hilo de recepción: {e}")
+    finally:
+        print("Cerrando socket desde hilo de recepción")
+        raw_socket.close()
+
+def send_thread(raw_socket, interface, mac_dst, mac_src, stop_event):
+    try:
+        while not stop_event.is_set():
+            message = input("Mensaje a enviar ('salir' para terminar): ")
+            if message.lower() == "salir":
+                stop_event.set()
+                break
+            frame = CreateFrame(mac_dst, mac_src, 1, message)
+            SendFrame(raw_socket, interface, frame)
+    except Exception as e:
+        print(f"Error en hilo de envío: {e}")
+    finally:
+        print("Cerrando socket desde hilo de envío")
+        raw_socket.close()
+
+if __name__ == "__main__":
+    interface = "enp0s3"
+    raw_socket = CreateSocket(interface)
+    mac_src = Obtener_Mac(interface)
+    mac_dst = "ff:ff:ff:ff:ff:ff"  # Cambiar por la MAC destino real
+
+    stop_event = threading.Event()
+
+    t1 = threading.Thread(target=receive_thread, args=(raw_socket, stop_event))
+    t2 = threading.Thread(target=send_thread, args=(raw_socket, interface, mac_dst, mac_src, stop_event))
+    t1.start()
+    t2.start()
+    t2.join()
+    stop_event.set()
+    t1.join()
