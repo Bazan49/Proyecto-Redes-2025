@@ -18,7 +18,7 @@ class FrameManager:
         pass
     
     @staticmethod
-    def create_frames(self, 
+    def create_frames(
                         mac_dst: str,
                         mac_src: str, 
                         msg_type: int,
@@ -79,7 +79,7 @@ class FrameManager:
         return frames
     
     @staticmethod
-    def decode(self, frame_data: bytes):# -> Optional[str]:
+    def decode(frame_data: bytes):# -> Optional[str]:
         
         try:
             frame = Frame.from_bytes(frame_data)

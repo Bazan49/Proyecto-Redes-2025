@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog
-import LinkLayer
+from LinkLayer import LinkLayer
 from MessageType import MessageType 
 from Frame_Manager import FrameManager
 import threading
@@ -20,17 +20,18 @@ class AlternativeInterface:
         self.window.geometry('700x500')
         self.bg_color = "#f0f0f0"
         self.window.configure(bg=self.bg_color)
-        self.setup_main_interface()
-
+        
         # Contactos (Amigos): Diccionario local sólo en memoria
         self.dic_usuarios = {"todos": "ff:ff:ff:ff:ff:ff"}
+
+        self.setup_main_interface()
 
         # Inicializaciones app
         self.interface = interface
         self.link_layer = None
         self.stop_event = None
-        self.local_mac = self.link_layer.get_Mac(self.interface)
-        app.start()
+        self.local_mac = None
+        self.start()
 
     def ask_username(self):
         root = tk.Tk()
@@ -58,16 +59,10 @@ class AlternativeInterface:
         self.add_friend_button = tk.Button(controls_frame, text="Añadir Amigo", command=self.add_friend)
         self.add_friend_button.pack(side='left', padx=(10, 0))
 
-        self.selected_user = tk.StringVar(value=list(self.dic_usuarios.keys())[0])
+        self.selected_user = tk.StringVar(value= list(self.dic_usuarios.keys())[0])
         tk.Label(controls_frame, text="Enviar a:", bg=self.bg_color).pack(side='left', padx=(20,5))
         self.user_optionmenu = tk.OptionMenu(controls_frame, self.selected_user, *self.dic_usuarios.keys())
         self.user_optionmenu.pack(side='left', padx=10)
-
-        # self.users = ["Todos", "Usuario1", "Usuario2", "Usuario3"]
-        # self.selected_user = tk.StringVar(value=self.users[0])
-        # tk.Label(controls_frame, text="Enviar a:", bg=self.bg_color).pack(side='left', padx=(20,5))
-        # self.user_optionmenu = tk.OptionMenu(controls_frame, self.selected_user, *self.users)
-        # self.user_optionmenu.pack(side='left')
 
         self.chat_canvas = tk.Canvas(self.window, bg="white")
         self.chat_canvas.pack(padx=10, pady=10, fill='both', expand=True)
@@ -135,7 +130,7 @@ class AlternativeInterface:
 
         if message:
             self.add_message_bubble(username, destinatario, f"{message}", is_own=True)
-            frame_list = FrameManager.CreateFrame(destinatario, self.local_mac, MessageType.TEXT, message) 
+            frame_list = FrameManager.create_frames(destinatario, self.local_mac, MessageType.TEXT, message) 
 
         if self.filepath:
             self.add_message_bubble(username, destinatario, f"[Archivo] {self.filepath}", is_own=True)
@@ -221,7 +216,7 @@ class AlternativeInterface:
     def accept_friend_request(self, src_name, src_mac):
         # Crear un frame de FRIEND_ANSWER y enviarlo
         self.add_new_friend(src_name, src_mac)
-        frame = FrameManager.CreateFrame(src_mac, self.local_mac, MessageType.FRIEND_ANSWER, self.username)
+        frame = FrameManager.create_frames(src_mac, self.local_mac, MessageType.FRIEND_ANSWER, self.username)
         self.link_layer.send_frame(frame)
 
     def show_friend_acceptance(self, src_name, src_mac):
@@ -234,7 +229,7 @@ class AlternativeInterface:
         )
 
     def search_friends(self):
-        frame = FrameManager.CreateFrame(self.dic_usuarios["todos"], self.local_mac, MessageType.FRIEND_REQUEST, self.username) #crear frame de solicitud de amistad
+        frame = FrameManager.create_frames(self.dic_usuarios["todos"], self.local_mac, MessageType.FRIEND_REQUEST, self.username) #crear frame de solicitud de amistad
         self.link_layer.send_frame(frame)
         # Notificar que fue enviada una solicitud
         messagebox.showinfo("Solicitud enviada", "Has enviado una solicitud de amistad a todos los usuarios de la red.", parent=self.window)
@@ -292,32 +287,33 @@ class AlternativeInterface:
         # Crear hilo de recepción
         self.receive_thread = threading.Thread(
             target=self.link_layer.receive_thread,
-            args=(self.stop_event),
+            args=(self.stop_event,),  # Faltaba la coma para hacer una tupla
             daemon=True
         )
         self.receive_thread.start()
 
+
     def start(self):
-        if self.username:
-            self.link_layer = LinkLayer.LinkLayer(self.interface)
-            self.stop_event = threading.Event()
+        self.stop_event = threading.Event()
+        self.link_layer = LinkLayer(self.interface)
+        self.local_mac = self.link_layer.local_mac
 
-            # Iniciar hilo de recepción
-            self.receive_thread = threading.Thread(
-                target=self.link_layer.receive_thread,
-                args=(self.stop_event,),
-                daemon=True
-            )
+        # Iniciar hilo de recepción
+        self.receive_thread = threading.Thread(
+            target=self.link_layer.receive_thread,
+            args=(self.stop_event,),
+            daemon=True
+        )
+   
+        self.receive_thread.start()
 
-            self.receive_thread.start()
+        # Iniciar polling de mensajes
+        self.poll_incoming()
 
-            # Iniciar polling de mensajes
-            self.poll_incoming()
-
-            self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
-            self.window.mainloop()
+        self.window.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.window.mainloop()
 
 
 if __name__ == "__main__":
-    app = AlternativeInterface("anp0s3")
+    app = AlternativeInterface("enp0s3")
 

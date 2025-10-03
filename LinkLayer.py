@@ -2,40 +2,56 @@ import socket
 import queue
 from Frame_Manager import FrameManager
 
-# Clase encargada de la comunicacion a nivel capa de enlace
 class LinkLayer:
+    
     def __init__(self, interface, ethertype=0x88B5):
         self.interface = interface
         self.raw_socket = None
         self.ethertype = ethertype
-        self.local_mac = self.get_Mac()
+        self.local_mac = self.get_Mac(interface)
         self.CreateSocket()
-
-        # Cola de mensajes recibidos
         self.incoming_queue = queue.Queue()
         
     def CreateSocket(self):
-        self.raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(self.ethertype))
-        self.raw_socket.bind((self.interface, 0))
-
+        try:
+            self.raw_socket = socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(self.ethertype))
+            self.raw_socket.bind((self.interface, 0))
+            print(f"Socket creado en interfaz {self.interface}")
+        except Exception as e:
+            print(f"Error creando socket en {self.interface}: {e}")
+            raise
+        
     def send_frame(self, frame_list):
-        for frame in frame_list:
-            self.raw_socket.send(frame)
-        print(f"Frame enviado: {frame.hex()}")
+        for i, frame in enumerate(frame_list):
+            try:
+                bytes_sent = self.raw_socket.send(frame)
+                print(f"Frame {i+1}/{len(frame_list)} enviado ({bytes_sent} bytes)")
+            except Exception as e:
+                print(f"Error enviando frame {i+1}: {e}")
+                raise
 
     def receive_frame(self, buff_size=65535):
-        frame, addr = self.raw_socket.recvfrom(buff_size)
-        print(f"Frame recibido de {addr}: {frame.hex()}")
-        return frame
+        try:
+            frame, addr = self.raw_socket.recvfrom(buff_size)
+            print(f"Frame recibido de {addr}: {len(frame)} bytes")
+            return frame
+        except socket.timeout:
+            return None
+        except Exception as e:
+            print(f"Error en receive_frame: {e}")
+            return None
 
-    # Metodo para la recepcion continua de mensajes
     def receive_thread(self, stop_event):
         try:
+            # Configurar timeout para verificar stop_event periódicamente
+            self.raw_socket.settimeout(1.0)
+            
             while not stop_event.is_set():
                 frame = self.receive_frame()
-                decoded_frame = FrameManager.decode(frame)
-                if decoded_frame:
-                    self.incoming_queue.put(decoded_frame)
+                if frame:
+                    decoded_frame = FrameManager.decode(frame)
+                    if decoded_frame:
+                        self.incoming_queue.put(decoded_frame)
         except Exception as e:
             print(f"Error en hilo de recepción: {e}")
         finally:
@@ -43,15 +59,22 @@ class LinkLayer:
 
     def close(self):
         if self.raw_socket:
-            self.raw_socket.close()
-            self.raw_socket = None
-            print("Socket cerrado")
+            try:
+                self.raw_socket.close()
+            except Exception as e:
+                print(f"Error cerrando socket: {e}")
+            finally:
+                self.raw_socket = None
+                print("Socket cerrado")
 
-    # Metodo para leer la MAC del dispositivo
     def get_Mac(self, interface):
         try:
             with open(f'/sys/class/net/{interface}/address', 'r') as f:
                 mac = f.read().strip()
+                if not mac or mac == "00:00:00:00:00:00":
+                    raise ValueError(f"MAC address inválida para {interface}")
                 return mac
         except FileNotFoundError:
-            return None 
+            raise ValueError(f"Interfaz {interface} no encontrada")
+        except Exception as e:
+            raise ValueError(f"Error leyendo MAC de {interface}: {e}")
