@@ -110,13 +110,14 @@ class Frame:
         else:
             payload_bytes = self.payload
             
-        length_bytes = len(payload_bytes).to_bytes(2, 'big')
+        length_bytes = len(payload_bytes).to_bytes(2, 'big')  
         msg_type_byte = self.msg_type.value if isinstance(self.msg_type, Enum) else int(self.msg_type)
+        
         frame_no_crc = (
             self.mac_to_bytes(self.dst_mac) +
             self.mac_to_bytes(self.src_mac) +
             self.ETHER_TYPE +
-            self.msg_type_byte.to_bytes(1, 'big') + #.to_bytes(1, 'big') +
+            msg_type_byte.to_bytes(1, 'big') + #.to_bytes(1, 'big') +
             self.fragment_id.to_bytes(2, 'big') +
             self.fragment_num.to_bytes(1, 'big') +
             self.more_fragments.to_bytes(1, 'big') +

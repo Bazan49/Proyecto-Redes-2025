@@ -17,13 +17,14 @@ class FrameManager:
         #self.reassembly_buffers: Dict[int, Dict[int, bytes]] = {}
         pass
     
+    @staticmethod
     def create_frames(self, 
                         mac_dst: str,
                         mac_src: str, 
                         msg_type: int,
                         message: Union[bytes, str],
                         filename: str = None,
-                        max_payload_size: int = MAX_PAYLOAD_SIZE) -> List[Frame]:
+                        max_payload_size: int = MAX_PAYLOAD_SIZE) -> List[bytes]:
         """Fragmenta un mensaje en múltiples frames"""
         
         if filename is not None:  ##verificar que sea de tipo archivo ademas
@@ -54,7 +55,7 @@ class FrameManager:
                 more_fragments=0,
                 payload=message_bytes
             )
-            frames.append(frame.to_bytes)
+            frames.append(frame.to_bytes())
             return frames
 
         # Fragmentar el mensaje
@@ -72,11 +73,12 @@ class FrameManager:
                 more_fragments=more_fragments,
                 payload=chunk
             )
-            frames.append(frame.to_bytes)
+            frames.append(frame.to_bytes())
             fragment_num += 1
 
         return frames
     
+    @staticmethod
     def decode(self, frame_data: bytes):# -> Optional[str]:
         
         try:
