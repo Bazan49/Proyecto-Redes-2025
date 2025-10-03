@@ -13,4 +13,5 @@ class MessageType(Enum):
         try:
             return cls(value)
         except ValueError:
-            return value  # fallback (devuelve el número si no es un valor válido)
+            raise ValueError("Tipo no valido")
+            

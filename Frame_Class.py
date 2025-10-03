@@ -174,13 +174,20 @@ class FrameManager:
                         mac_src: str, 
                         msg_type: int,
                         message: Union[bytes, str],
+                        filename: str = None,
                         max_payload_size: int = MAX_PAYLOAD_SIZE) -> List[Frame]:
         """Fragmenta un mensaje en múltiples frames"""
         
-        if isinstance(message, str):
-            message_bytes = message.encode('utf-8')
+        if filename is not None:  ##verificar que sea de tipo archivo ademas
+            nombre_bytes = filename.encode('utf-8')
+            largo_nombre = len(nombre_bytes)
+            # La secuencia completa: largo (2 bytes) + nombre + mensaje (bytes) 
+            message_bytes = (largo_nombre.to_bytes(2, 'big') + nombre_bytes + message_bytes)
         else:
-            message_bytes = message
+                if isinstance(message, str):
+                    message_bytes = message.encode('utf-8')
+                else:
+                    message_bytes = message
 
         total_length = len(message_bytes)
         fragment_id = int(time.time() * 1000) % 65536
@@ -232,18 +239,25 @@ class FrameManager:
         
         # Verificar CRC
         if not frame.verify_crc(frame_data):
-            print("Error: CRC no coincide, descartando frame")
+            print("Error: CRC no coincide, descartando frame")  
             return None
 
         print(f"📦 Frame recibido: {frame}")
 
-        # Decodificar el payload si corresponde
-        try:
-            frame.payload = frame.payload.decode('utf-8')
-        except Exception:
-            pass  # Si no es texto, lo deja como bytes
-
-        return frame 
+        # Decodificar el payload si es necesario
+        if frame.msg_type == MessageType.TEXT:    
+            try:
+                frame.payload = frame.payload.decode('utf-8')
+            except Exception:
+                print(f"hubo un error")
+            return frame 
+        elif frame.msg_type == MessageType.FILE:
+            largo_nombre = int.from_bytes(frame.payload[0:2], 'big')
+            nombre = frame.payload[2:2+largo_nombre].decode('utf-8')
+            datos_archivo = frame.payload[2+largo_nombre:]
+            return nombre  #VERIFICAR BIEN COMO ENVIAR ESTO
+            
+        
     
         #POR AHORA NO
         
@@ -277,8 +291,6 @@ class FrameManager:
     #     # message_bytes = b''.join(all_fragments[i] for i in sorted(all_fragments))
         
     #     #provisional
-        
-        
     #     try:
     #         message = message_bytes.decode('utf-8')
     #     except UnicodeDecodeError:
@@ -290,3 +302,6 @@ class FrameManager:
     #     del self.reassembly_buffers[fragment_id]
         
     #     return message
+    
+   
+    
