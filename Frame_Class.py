@@ -29,7 +29,7 @@ class Frame:
     def __init__(self, 
                  dst_mac: str = "",
                  src_mac: str = "",
-                 msg_type: int = 0,
+                 msg_type: MessageType = MessageType.TEXT,
                  fragment_id: int = 0,
                  fragment_num: int = 0,
                  more_fragments: int = 0,
@@ -37,7 +37,7 @@ class Frame:
         
         self.dst_mac = dst_mac
         self.src_mac = src_mac
-        self.msg_type = MessageType.from_value(msg_type)
+        self.msg_type = msg_type
         self.fragment_id = fragment_id
         self.fragment_num = fragment_num
         self.more_fragments = more_fragments
