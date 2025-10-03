@@ -1,0 +1,292 @@
+import socket
+import threading
+import struct
+import sys
+import binascii
+import time
+from typing import Dict, List, Optional, Union
+from MessageType import MessageType
+
+# Offsets de los campos en el frame
+# 'dst_mac': 0,      # 6 bytes
+# 'src_mac': 6,      # 6 bytes  
+# 'ethertype': 12,   # 2 bytes
+# 'msg_type': 14,    # 1 byte
+# 'fragment_id': 15, # 2 bytes
+# 'fragment_num': 17, # 1 byte
+# 'more_fragments': 18, # 1 byte
+# 'length': 19,      # 2 bytes
+# 'payload': 21,     # variable
+# CRC está al final, se calcula dinámicamente
+       
+MTU = 1500
+MAX_PAYLOAD_SIZE = MTU - 25
+
+class Frame:
+    ETHER_TYPE = b"\x88\xb5"  # EtherType personalizado
+    
+    def __init__(self, 
+                 dst_mac: str = "",
+                 src_mac: str = "",
+                 msg_type: int = 0,
+                 fragment_id: int = 0,
+                 fragment_num: int = 0,
+                 more_fragments: int = 0,
+                 payload: Union[bytes, str] = b""):
+        
+        self.dst_mac = dst_mac
+        self.src_mac = src_mac
+        self.msg_type = MessageType.from_value(msg_type)
+        self.fragment_id = fragment_id
+        self.fragment_num = fragment_num
+        self.more_fragments = more_fragments
+        self.payload = payload if isinstance(payload, bytes) else payload.encode('utf-8')
+        self.length = len(self.payload)
+        
+    @classmethod
+    def from_bytes(cls, frame_data: bytes) -> 'Frame':
+        """Crea un Frame a partir de datos bytes recibidos"""
+        if len(frame_data) < 25:
+            raise ValueError("Frame demasiado corto")
+            
+        frame = cls()
+        
+        # Extraer campos del frame
+        frame.dst_mac = cls.bytes_to_mac(frame_data[0:6])
+        frame.src_mac = cls.bytes_to_mac(frame_data[6:12])
+        
+        # Verificar EtherType
+        ethertype = frame_data[12:14]
+        if ethertype != cls.ETHER_TYPE:
+            raise ValueError(f"EtherType incorrecto: {ethertype.hex()}")
+            
+        frame.msg_type = MessageType.from_value(frame_data[14])
+        frame.fragment_id = int.from_bytes(frame_data[15:17], 'big')
+        frame.fragment_num = frame_data[17]
+        frame.more_fragments = frame_data[18]
+        frame.length = int.from_bytes(frame_data[19:21], 'big')
+        
+        # Extraer payload (sin incluir CRC)
+        payload_end = 21 + frame.length
+        if payload_end > len(frame_data) - 4:
+            raise ValueError("Longitud del payload inconsistente")
+            
+        frame.payload = frame_data[21:payload_end]
+        
+        return frame
+    
+    @staticmethod
+    def parse_frame_headers(frame):
+        if len(frame) < 25:  # validar tamaño mínimo
+            raise ValueError("Frame muy corto para los encabezados requeridos")
+
+        mac_dst = frame[0:6].hex()
+        mac_src = frame[6:12].hex()
+        ethertype = frame[12:14]
+        msg_type = frame[14]
+        fragment_id = int.from_bytes(frame[15:17], 'big')
+        fragment_num = frame[17]
+        more_fragments = frame[18]
+        length = int.from_bytes(frame[19:21], 'big')
+        payload = frame[21:21+length]
+
+        return {
+            "mac_dst": mac_dst,
+            "mac_src": mac_src,
+            "ethertype": ethertype,
+            "msg_type": msg_type,
+            "fragment_id": fragment_id,
+            "fragment_num": fragment_num,
+            "more_fragments": more_fragments,
+            "length": length,
+            "payload": payload,
+        }
+
+    def to_bytes(self) -> bytes:
+        """Convierte el Frame a bytes listo para enviar"""
+        if isinstance(self.payload, str):
+            payload_bytes = self.payload.encode('utf-8')
+        else:
+            payload_bytes = self.payload
+            
+        length_bytes = len(payload_bytes).to_bytes(2, 'big')
+        msg_type_byte = self.msg_type.value if isinstance(self.msg_type, Enum) else int(self.msg_type)
+        frame_no_crc = (
+            self.mac_to_bytes(self.dst_mac) +
+            self.mac_to_bytes(self.src_mac) +
+            self.ETHER_TYPE +
+            self.msg_type_byte.to_bytes(1, 'big') + #.to_bytes(1, 'big') +
+            self.fragment_id.to_bytes(2, 'big') +
+            self.fragment_num.to_bytes(1, 'big') +
+            self.more_fragments.to_bytes(1, 'big') +
+            length_bytes +
+            payload_bytes
+        )
+        
+        crc = self.crc32_bytes(frame_no_crc)
+        frame = frame_no_crc + crc
+        
+        print(f"🔧 Frame creado: ID={self.fragment_id}, Num={self.fragment_num}, "
+              f"More={self.more_fragments}, Len={len(payload_bytes)}, CRC={crc.hex()}")
+        
+        return frame
+    
+    @staticmethod
+    def mac_to_bytes(mac: str) -> bytes:
+        """Convierte dirección MAC string a bytes"""
+        return bytes.fromhex(mac.replace(":", ""))
+    
+    @staticmethod  
+    def bytes_to_mac(mac_bytes: bytes) -> str:
+        """Convierte bytes de MAC a string formateado"""
+        return ':'.join(f'{b:02x}' for b in mac_bytes)
+    
+    @staticmethod
+    def crc32_bytes(data: bytes) -> bytes:
+        """Calcula CRC32 de los datos"""
+        crc = binascii.crc32(data) & 0xffffffff
+        return crc.to_bytes(4, 'big')
+    
+    def verify_crc(self, frame_data: bytes) -> bool:
+        """Verifica el CRC del frame"""
+        if len(frame_data) < 25:
+            return False
+            
+        frame_without_crc = frame_data[:-4]
+        crc_received = frame_data[-4:]
+        crc_calculated = self.crc32_bytes(frame_without_crc)
+        
+        return crc_received == crc_calculated
+    
+    def __str__(self) -> str:
+        return (f"Frame(DST={self.dst_mac}, SRC={self.src_mac}, "
+                f"Type={self.msg_type}, FragID={self.fragment_id}, "
+                f"FragNum={self.fragment_num}, MoreFrags={self.more_fragments}, "
+                f"Len={self.length})")
+
+class FrameManager:
+    def __init__(self):
+        #self.reassembly_buffers: Dict[int, Dict[int, bytes]] = {}
+        pass
+    
+    def create_frames(self, 
+                        mac_dst: str,
+                        mac_src: str, 
+                        msg_type: int,
+                        message: Union[bytes, str],
+                        max_payload_size: int = MAX_PAYLOAD_SIZE) -> List[Frame]:
+        """Fragmenta un mensaje en múltiples frames"""
+        
+        if isinstance(message, str):
+            message_bytes = message.encode('utf-8')
+        else:
+            message_bytes = message
+
+        total_length = len(message_bytes)
+        fragment_id = int(time.time() * 1000) % 65536
+        offset = 0
+        fragment_num = 0
+        frames = []
+
+        # Si no necesita fragmentación
+        if total_length <= max_payload_size:
+            frame = Frame(
+                dst_mac=mac_dst,
+                src_mac=mac_src,
+                msg_type=msg_type,
+                fragment_id=fragment_id,
+                fragment_num=0,
+                more_fragments=0,
+                payload=message_bytes
+            )
+            frames.append(frame.to_bytes)
+            return frames
+
+        # Fragmentar el mensaje
+        while offset < total_length:
+            chunk = message_bytes[offset:offset + max_payload_size]
+            offset += max_payload_size
+            more_fragments = 1 if offset < total_length else 0
+
+            frame = Frame(
+                dst_mac=mac_dst,
+                src_mac=mac_src,
+                msg_type=msg_type,
+                fragment_id=fragment_id,
+                fragment_num=fragment_num,
+                more_fragments=more_fragments,
+                payload=chunk
+            )
+            frames.append(frame.to_bytes)
+            fragment_num += 1
+
+        return frames
+    
+    def decode(self, frame_data: bytes):# -> Optional[str]:
+        
+        try:
+            frame = Frame.from_bytes(frame_data)
+        except ValueError as e:
+            print(f"Error parsing frame: {e}")
+            return None
+        
+        # Verificar CRC
+        if not frame.verify_crc(frame_data):
+            print("Error: CRC no coincide, descartando frame")
+            return None
+
+        print(f"📦 Frame recibido: {frame}")
+
+        # Decodificar el payload si corresponde
+        try:
+            frame.payload = frame.payload.decode('utf-8')
+        except Exception:
+            pass  # Si no es texto, lo deja como bytes
+
+        return frame 
+    
+        #POR AHORA NO
+        
+        # Guardar fragmento en buffer de reensamblaje
+        # if frame.fragment_id not in self.reassembly_buffers:
+        #     self.reassembly_buffers[frame.fragment_id] = {}
+
+        # self.reassembly_buffers[frame.fragment_id][frame.fragment_num] = frame.payload
+
+        # # Si es el último fragmento, intentar reensamblar
+        # if frame.more_fragments == 0:
+        #     return self._reassemble_message(frame.fragment_id)
+        
+        # return None
+    
+    # def _reassemble_message(self, fragment_id: int) -> Optional[str]:
+    #     """Reensambla mensaje desde los fragmentos"""
+    #     if fragment_id not in self.reassembly_buffers:
+    #         return None
+            
+    #     all_fragments = self.reassembly_buffers[fragment_id]
+        
+    #     # Verificar que tenemos todos los fragmentos consecutivos
+    #     max_fragment = max(all_fragments.keys())
+    #     for i in range(max_fragment + 1):
+    #         if i not in all_fragments:
+    #             print(f"⚠️  Fragmento {i} faltante para ID {fragment_id}")
+    #             return None
+        
+    #     # Reensamblar en orden
+    #     # message_bytes = b''.join(all_fragments[i] for i in sorted(all_fragments))
+        
+    #     #provisional
+        
+        
+    #     try:
+    #         message = message_bytes.decode('utf-8')
+    #     except UnicodeDecodeError:
+    #         message = f"<Datos binarios: {len(message_bytes)} bytes>"
+        
+    #    print(f"✅ Mensaje Reensamblado Completo (Fragment ID {fragment_id}): {message}")
+
+    #     # Limpiar buffer
+    #     del self.reassembly_buffers[fragment_id]
+        
+    #     return message
