@@ -1,6 +1,5 @@
 import binascii
-import time
-from typing import Dict, List, Optional, Union
+from typing import Union
 from MessageType import MessageType
 from enum import Enum
 

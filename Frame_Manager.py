@@ -1,7 +1,6 @@
 
-import binascii
 import time
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 from MessageType import MessageType
 from enum import Enum
 from Frame_Class import Frame
@@ -111,7 +110,12 @@ class FrameManager:
                
     def _process_complete_frame(frame: Frame) -> Frame:
         """Procesa un frame que ya está completo (no fragmentado)"""
-        if frame.msg_type == MessageType.TEXT:    
+        dst_mac = frame.dst_mac
+        src_mac = frame.src_mac
+        frame.dst_mac = frame.bytes_to_mac(dst_mac)
+        frame.src_mac = frame.bytes_to_mac(src_mac)
+        print(f"src mac: {frame.src_mac} y dst mac : {frame.dst_mac}")
+        if frame.msg_type == MessageType.TEXT or frame.msg_type == MessageType.FRIEND_REQUEST or frame.msg_type == MessageType.FRIEND_ANSWER:    
             try:
                 frame.payload = frame.payload.decode('utf-8')
             except Exception:
