@@ -1,7 +1,4 @@
-import socket
-import threading
-import struct
-import sys
+
 import binascii
 import time
 from typing import Dict, List, Optional, Union
@@ -14,7 +11,7 @@ MAX_PAYLOAD_SIZE = MTU - 25
 
 class FrameManager:
     def __init__(self):
-        #self.reassembly_buffers: Dict[int, Dict[int, bytes]] = {}
+        #self.reassembly_buffers: Dict[tuple, Dict[int, bytes]] = {}
         pass
     
     @staticmethod
@@ -94,39 +91,48 @@ class FrameManager:
 
         print(f"📦 Frame recibido: {frame}")
 
-        # Decodificar el payload si es necesario
+        # Si no está fragmentado, devolver directamente
+        if frame.more_fragments == 0 and frame.fragment_num == 0:
+            return FrameManager._process_complete_frame(frame)
+        
+        # # Guardar en el buffer y verificar si está completo en caso de ser fragmentado
+        # buffer_key = (frame.src_mac, frame.fragment_id)
+        
+        # if buffer_key not in self.reassembly_buffers:
+        #     self.reassembly_buffers[buffer_key] = {}
+
+        # self.reassembly_buffers[buffer_key][frame.fragment_num] = frame
+
+        # # Si es el último fragmento, intentar reensamblar
+        # if frame.more_fragments == 0:
+        #     return self._reassemble_message(buffer_key, frame)
+        
+        return None
+               
+    def _process_complete_frame(frame: Frame) -> Frame:
+        """Procesa un frame que ya está completo (no fragmentado)"""
         if frame.msg_type == MessageType.TEXT:    
             try:
                 frame.payload = frame.payload.decode('utf-8')
             except Exception:
-                print(f"hubo un error")
-            return frame 
+                print("Error decodificando payload de texto")
         elif frame.msg_type == MessageType.FILE:
-            largo_nombre = int.from_bytes(frame.payload[0:2], 'big')
-            nombre = frame.payload[2:2+largo_nombre].decode('utf-8')
-            datos_archivo = frame.payload[2+largo_nombre:]
-            return nombre  #VERIFICAR BIEN COMO ENVIAR ESTO
-            
+            try:
+                largo_nombre = int.from_bytes(frame.payload[0:2], 'big')
+                nombre = frame.payload[2:2+largo_nombre].decode('utf-8')
+                datos_archivo = frame.payload[2+largo_nombre:]
+                # Devolvemos el frame con la información procesada
+                frame.filename = nombre
+                frame.payload = datos_archivo
+            except Exception as e:
+                print(f"Error procesando archivo: {e}")
         
+        return frame
     
-        #POR AHORA NO
-        
-        # Guardar fragmento en buffer de reensamblaje
-        # if frame.fragment_id not in self.reassembly_buffers:
-        #     self.reassembly_buffers[frame.fragment_id] = {}
-
-        # self.reassembly_buffers[frame.fragment_id][frame.fragment_num] = frame.payload
-
-        # # Si es el último fragmento, intentar reensamblar
-        # if frame.more_fragments == 0:
-        #     return self._reassemble_message(frame.fragment_id)
-        
-        # return None
-    
-    # def _reassemble_message(self, fragment_id: int) -> Optional[str]:
+    # def _reassemble_message(self,  buffer_key: tuple, last_frame: Frame) -> Optional[Frame]:
     #     """Reensambla mensaje desde los fragmentos"""
-    #     if fragment_id not in self.reassembly_buffers:
-    #         return None
+    #     if buffer_key not in self.reassembly_buffers:
+    #        return None
             
     #     all_fragments = self.reassembly_buffers[fragment_id]
         
@@ -140,16 +146,22 @@ class FrameManager:
     #     # Reensamblar en orden
     #     # message_bytes = b''.join(all_fragments[i] for i in sorted(all_fragments))
         
-    #     #provisional
-    #     try:
-    #         message = message_bytes.decode('utf-8')
-    #     except UnicodeDecodeError:
-    #         message = f"<Datos binarios: {len(message_bytes)} bytes>"
+    #     # Crear frame reensamblado
+        # reassembled_frame = Frame(
+        #     dst_mac = last_frame.dst_mac,
+        #     src_mac = last_frame.src_mac,
+        #     msg_type = last_frame.msg_type,
+        #     fragment_id = last_frame.fragment_id,
+        #     fragment_num = 0,  
+        #     more_fragments = 0,
+        #     payload = message_bytes
+        # )
         
+    #     processed_frame = self._process_complete_frame(reassembled_frame)
     #    print(f"✅ Mensaje Reensamblado Completo (Fragment ID {fragment_id}): {message}")
 
     #     # Limpiar buffer
     #     del self.reassembly_buffers[fragment_id]
         
-    #     return message
+    #     return processed_frame
     
