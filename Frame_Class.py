@@ -47,10 +47,11 @@ class Frame:
             raise ValueError("Frame demasiado corto")
             
         frame = cls()
-        
+        print(f" en bytes la mac es frame_data[0:6]")
         # Extraer campos del frame
         frame.dst_mac = cls.bytes_to_mac(frame_data[0:6])
         frame.src_mac = cls.bytes_to_mac(frame_data[6:12])
+        print(f"src: {frame.src_mac}, dst: {frame.dst_mac}")
         
         # Verificar EtherType
         ethertype = frame_data[12:14]

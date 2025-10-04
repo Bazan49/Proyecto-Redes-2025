@@ -110,10 +110,6 @@ class FrameManager:
                
     def _process_complete_frame(frame: Frame) -> Frame:
         """Procesa un frame que ya está completo (no fragmentado)"""
-        dst_mac = frame.dst_mac
-        src_mac = frame.src_mac
-        frame.dst_mac = frame.bytes_to_mac(dst_mac)
-        frame.src_mac = frame.bytes_to_mac(src_mac)
         print(f"src mac: {frame.src_mac} y dst mac : {frame.dst_mac}")
         if frame.msg_type == MessageType.TEXT or frame.msg_type == MessageType.FRIEND_REQUEST or frame.msg_type == MessageType.FRIEND_ANSWER:    
             try:
