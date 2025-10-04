@@ -146,19 +146,19 @@ class AlternativeInterface:
         while not self.link_layer.incoming_queue.empty():
             decoded_frame = self.link_layer.incoming_queue.get()
 
-            if(decoded_frame.Type == MessageType.TEXT):
+            if(decoded_frame.msg_type == MessageType.TEXT):
                 # Mostrar en la GUI como mensaje recibido
                 self.add_message_bubble("Amigo", self.username, decoded_frame.payload, is_own=False)
 
-            elif(decoded_frame.Type == MessageType.FILE):
+            elif(decoded_frame.msg_type == MessageType.FILE):
                 # Guardar el archivo
                 self.receive_and_save_file(decoded_frame.payload, decoded_frame.FileName, decoded_frame.src_mac) 
 
-            elif(decoded_frame.Type == MessageType.FRIEND_REQUEST):
+            elif(decoded_frame.msg_type == MessageType.FRIEND_REQUEST):
                 # Mostrar solicitud de amistad
                 self.show_friend_request(decoded_frame.payload, decoded_frame.src_mac)
 
-            elif(decoded_frame.Type == MessageType.FRIEND_ANSWER):
+            elif(decoded_frame.msg_type == MessageType.FRIEND_ANSWER):
                 # Mostrar aviso de que la solicitud fue aceptada
                 self.show_friend_acceptance(decoded_frame.payload, decoded_frame.src_mac)
 
@@ -203,6 +203,8 @@ class AlternativeInterface:
             menu.add_command(label=user, command=lambda value=user: self.selected_user.set(value))
 
     def show_friend_request(self, src_name, src_mac):
+        self.window.focus_force()
+        self.window.lift()
         # Mostrar un cuadro de diálogo preguntando si aceptar la solicitud
         answer = messagebox.askyesno(
             "Solicitud de amistad",
