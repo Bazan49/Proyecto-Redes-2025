@@ -25,6 +25,7 @@ class LinkLayer:
         for i, frame in enumerate(frame_list):
             try:
                 bytes_sent = self.raw_socket.send(frame)
+                print(f"frame enviado: {frame.hex()}")
                 print(f"Frame {i+1}/{len(frame_list)} enviado ({bytes_sent} bytes)")
             except Exception as e:
                 print(f"Error enviando frame {i+1}: {e}")
@@ -33,6 +34,7 @@ class LinkLayer:
     def receive_frame(self, buff_size=65535):
         try:
             frame, addr = self.raw_socket.recvfrom(buff_size)
+            print(f"recibi el frame :{frame.hex()}")
             print(f"Frame recibido de {addr}: {len(frame)} bytes")
             return frame
         except socket.timeout:
@@ -71,6 +73,7 @@ class LinkLayer:
         try:
             with open(f'/sys/class/net/{interface}/address', 'r') as f:
                 mac = f.read().strip()
+                print(f"mac obtenida: {mac}")
                 if not mac or mac == "00:00:00:00:00:00":
                     raise ValueError(f"MAC address inválida para {interface}")
                 return mac
