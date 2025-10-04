@@ -134,8 +134,15 @@ class AlternativeInterface:
 
         if self.filepath:
             self.add_message_bubble(username, destinatario, f"[Archivo] {self.filepath}", is_own=True)
-            # frame_list = self.frame_manager.CreateFrame(destinatario, self.local_mac, MessageType.FILE, )
-            # self.filepath = None
+            # Obtener datos del archivo:
+            file_name = os.path.basename(self.filepath)
+            try:
+                with open(self.filepath, 'rb') as f:
+                    file_data = f.read()
+            except Exception as e:
+                raise IOError(f"Error leyendo archivo: {e}")
+            frame_list = FrameManager.create_frames(destinatario, self.local_mac, MessageType.FILE, file_data, file_name)
+            self.filepath = None
 
         if frame_list: #se envia el frame
             self.link_layer.send_frame(frame_list) 
@@ -152,7 +159,7 @@ class AlternativeInterface:
 
             elif(decoded_frame.msg_type == MessageType.FILE):
                 # Guardar el archivo
-                self.receive_and_save_file(decoded_frame.payload, decoded_frame.FileName, decoded_frame.src_mac) 
+                self.receive_and_save_file(decoded_frame.payload, decoded_frame.filename, decoded_frame.src_mac) 
 
             elif(decoded_frame.msg_type == MessageType.FRIEND_REQUEST):
                 # Mostrar solicitud de amistad
@@ -245,34 +252,34 @@ class AlternativeInterface:
             messagebox.showinfo("Archivo seleccionado", f"Archivo seleccionado:\n{filepath}", parent=self.window)
 
     # # Método para recibir y guardar archivos
-    # def receive_and_save_file(self, file_data, filename, sender):
-    #     try:
-    #         # Crear carpeta de descargas si no existe
-    #         downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads", "LinkChat_Files")
-    #         if not os.path.exists(downloads_folder):
-    #             os.makedirs(downloads_folder)
+    def receive_and_save_file(self, file_data, filename, sender):
+        try:
+            # Crear carpeta de descargas si no existe
+            downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads", "LinkChat_Files")
+            if not os.path.exists(downloads_folder):
+                os.makedirs(downloads_folder)
             
-    #         # Si el archivo ya existe, agregar timestamp
-    #         base_name, extension = os.path.splitext(filename)
-    #         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            # Si el archivo ya existe, agregar timestamp
+            base_name, extension = os.path.splitext(filename)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             
-    #         # Crear nombre único para el archivo
-    #         unique_filename = f"{base_name}_{timestamp}{extension}"
-    #         file_path = os.path.join(downloads_folder, unique_filename)
+            # Crear nombre único para el archivo
+            unique_filename = f"{base_name}_{timestamp}{extension}"
+            file_path = os.path.join(downloads_folder, unique_filename)
             
-    #         # Guardar el archivo
-    #         with open(file_path, 'wb') as file:
-    #             file.write(file_data)
+            # Guardar el archivo
+            with open(file_path, 'wb') as file:
+                file.write(file_data)
 
-    #         # Mostrar mensaje en el chat
-    #         self.add_message_bubble(sender, self.username, f"[Archivo recibido] {filename}", is_own=False)
+            # Mostrar mensaje en el chat
+            self.add_message_bubble(sender, self.username, f"[Archivo recibido] {filename}", is_own=False)
             
-    #         return True
+            return True
             
-    #     except Exception as e:
-    #         print(f"Error al guardar archivo: {e}")
-    #         messagebox.showerror("Error", f"No se pudo guardar el archivo: {str(e)}", parent=self.window)
-    #         return False
+        except Exception as e:
+            print(f"Error al guardar archivo: {e}")
+            messagebox.showerror("Error", f"No se pudo guardar el archivo: {str(e)}", parent=self.window)
+            return False
 
     # OTROS
 
