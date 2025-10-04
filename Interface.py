@@ -254,35 +254,50 @@ class AlternativeInterface:
     # # Método para recibir y guardar archivos
     def receive_and_save_file(self, file_data, filename, sender):
         try:
-            # Crear carpeta de descargas si no existe
-            downloads_folder = os.path.join(os.path.expanduser("~"), "Downloads", "LinkChat_Files")
-            if not os.path.exists(downloads_folder):
-                os.makedirs(downloads_folder)
+            print(f"🔄 Intentando guardar archivo: {filename}")
             
-            # Si el archivo ya existe, agregar timestamp
+            # El archivo se guarda en el script actual
+            script_directory = os.path.dirname(os.path.abspath(__file__))
+            downloads_folder = os.path.join(script_directory, "LinkChat_Files")
+            
+            print(f"📁 Ruta destino: {downloads_folder}")
+            
+            # Crear carpeta si no existe
+            if not os.path.exists(downloads_folder):
+                print("📂 Creando directorio...")
+                os.makedirs(downloads_folder, exist_ok=True)
+                print("✅ Directorio creado")
+            else:
+                print("✅ El directorio ya existe")
+
+            # Generar nombre único
             base_name, extension = os.path.splitext(filename)
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            
-            # Crear nombre único para el archivo
             unique_filename = f"{base_name}_{timestamp}{extension}"
             file_path = os.path.join(downloads_folder, unique_filename)
             
-            # Guardar el archivo
+            # Guardar archivo
             with open(file_path, 'wb') as file:
                 file.write(file_data)
-
-            # Mostrar mensaje en el chat
-            self.add_message_bubble(sender, self.username, f"[Archivo recibido] {filename}", is_own=False)
             
+            print("✅ Archivo guardado exitosamente")
+            
+            # Verificar que el archivo se creó
+            if os.path.exists(file_path):
+                print(f"📄 Archivo verificado: {os.path.getsize(file_path)} bytes")
+            else:
+                print("❌ El archivo no se creó después de guardar")
+                
+            self.add_message_bubble(sender, self.username, f"[Archivo recibido] {filename}", is_own=False)
             return True
             
         except Exception as e:
-            print(f"Error al guardar archivo: {e}")
-            messagebox.showerror("Error", f"No se pudo guardar el archivo: {str(e)}", parent=self.window)
+            print(f"❌ Error completo: {str(e)}")
+            import traceback
+            print(f"🔍 Traceback: {traceback.format_exc()}")
             return False
 
     # OTROS
-
     def on_closing(self):
         self.stop_event.set() #Indica que los hilos deben parar
         if self.link_layer:

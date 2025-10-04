@@ -27,7 +27,7 @@ class FrameManager:
             nombre_bytes = filename.encode('utf-8')
             largo_nombre = len(nombre_bytes)
             # La secuencia completa: largo (2 bytes) + nombre + mensaje (bytes) 
-            message_bytes = (largo_nombre.to_bytes(2, 'big') + nombre_bytes + message_bytes)
+            message_bytes = (largo_nombre.to_bytes(2, 'big') + nombre_bytes + message)
         else:
                 if isinstance(message, str):
                     message_bytes = message.encode('utf-8')
