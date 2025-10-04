@@ -2,7 +2,6 @@
 import time
 from typing import Dict, List, Union, Optional
 from MessageType import MessageType
-from enum import Enum
 from Frame_Class import Frame
 
 MTU = 1500
@@ -10,8 +9,9 @@ MAX_PAYLOAD_SIZE = MTU - 25
 
 class FrameManager:
     def __init__(self):
-        self.reassembly_buffers: Dict[tuple, Dict[int, bytes]] = {}
         pass
+    
+    reassembly_buffers: Dict[tuple, Dict[int, Frame]] = {}
     
     @staticmethod
     def create_frames(
@@ -74,8 +74,8 @@ class FrameManager:
 
         return frames
     
-    #@staticmethod
-    def decode(frame_data: bytes):# -> Optional[str]:
+    @staticmethod
+    def decode(frame_data: bytes):
         
         try:
             frame = Frame.from_bytes(frame_data)
@@ -107,7 +107,8 @@ class FrameManager:
             return FrameManager._reassemble_message(buffer_key, frame)
         
         return None
-               
+    
+    @staticmethod           
     def _process_complete_frame(frame: Frame) -> Frame:
         """Procesa un frame que ya está completo (no fragmentado)"""
         print(f"src mac: {frame.src_mac} y dst mac : {frame.dst_mac}")
@@ -130,12 +131,13 @@ class FrameManager:
         
         return frame
     
-    def _reassemble_message(self,  buffer_key: tuple, last_frame: Frame) -> Optional[Frame]:
+    @staticmethod
+    def _reassemble_message(buffer_key: tuple, last_frame: Frame) -> Optional[Frame]:
         """Reensambla mensaje desde los fragmentos"""
-        if buffer_key not in self.reassembly_buffers:
+        if buffer_key not in FrameManager.reassembly_buffers:
            return None
             
-        all_fragments = self.reassembly_buffers[buffer_key]
+        all_fragments = FrameManager.reassembly_buffers[buffer_key]
         
         #TAL VEZ GUARDAR LOS QUE ME FALTAN
         
@@ -147,7 +149,7 @@ class FrameManager:
                 return None
         
         # Reensamblar en orden
-        message_bytes = b''.join(all_fragments[i] for i in sorted(all_fragments))
+        message_bytes = b''.join(all_fragments[i].payload for i in sorted(all_fragments))
         
         # Crear frame reensamblado
         reassembled_frame = Frame(
@@ -160,11 +162,11 @@ class FrameManager:
             payload = message_bytes
         )
         
-        processed_frame = self._process_complete_frame(reassembled_frame)
-        print(f"✅ Mensaje Reensamblado Completo (Fragment ID {fragment_id}): {message}")
+        processed_frame = FrameManager._process_complete_frame(reassembled_frame)
+        print(f"✅ Mensaje Reensamblado Completo (Fragment ID {buffer_key}): un")
 
         # Limpiar buffer
-        del self.reassembly_buffers[buffer_key]
+        del FrameManager.reassembly_buffers[buffer_key]
         
         return processed_frame
     
